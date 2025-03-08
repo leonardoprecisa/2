@@ -1,7 +1,7 @@
 streamlit
 pandas
-numpy==1.23.5  # Versão estável e compatível com pandas_ta
-pandas_ta==0.3.14b0
+numpy
+ta-lib
 requests
 pytz
 setuptools
