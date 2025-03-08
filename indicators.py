@@ -1,9 +1,13 @@
-# indicators.py
 import pandas as pd
-import pandas_ta as ta
+import talib
 
 class Indicators:
     def __init__(self, dados):
+        """
+        Inicializa a classe com os dados fornecidos.
+        
+        :param dados: DataFrame contendo os dados do ativo (timestamp, open, high, low, close, volume).
+        """
         self.dados = dados
         self.padroes_detectados = []
         self.pesos_indicadores = {
@@ -20,65 +24,43 @@ class Indicators:
             "LTB": 0.10,
             "Pullback": 0.10
         }
-        self.pesos_padroes = {
-            "Hammer": 0.20,
-            "Shooting Star": 0.20,
-            "Bullish Engulfing": 0.20,
-            "Bearish Engulfing": 0.20,
-            "Doji": 0.10,
-            "Marubozu": 0.10
-        }
 
     def calcular_indicadores(self):
-        """Calcula todos os indicadores técnicos."""
+        """
+        Calcula todos os indicadores técnicos usando TA-Lib.
+        """
         try:
             df = self.dados
             
             # Indicadores de Compra
-            df['EMA9'] = ta.ema(df['close'], length=9)
-            df['EMA21'] = ta.ema(df['close'], length=21)
-            df['RSI'] = ta.rsi(df['close'], length=14)
-            df['MACD'] = ta.macd(df['close'])['MACD_12_26_9']
-            df['Bollinger_Upper'], df['Bollinger_Lower'] = ta.bbands(df['close'], length=20).iloc[:, 0], ta.bbands(df['close'], length=20).iloc[:, 2]
-            df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-            df['LTA'] = ta.linreg(df['close'], length=20, angle=True)
+            df['EMA9'] = talib.EMA(df['close'], timeperiod=9)
+            df['EMA21'] = talib.EMA(df['close'], timeperiod=21)
+            df['RSI'] = talib.RSI(df['close'], timeperiod=14)
+            df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+            df['Bollinger_Upper'], df['Bollinger_Middle'], df['Bollinger_Lower'] = talib.BBANDS(
+                df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0
+            )
+            df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+            df['LTA'] = talib.LINEARREG_ANGLE(df['close'], timeperiod=20)
             
             # Indicadores de Venda
-            df['Estocastico'] = ta.stoch(df['high'], df['low'], df['close'], k=14, d=3)['STOCHk_14_3_3']
-            df['LTB'] = ta.linreg(df['close'], length=20, slope=True)
-            df['Pullback'] = ta.roc(df['close'], length=1)
+            df['Estocastico_K'], df['Estocastico_D'] = talib.STOCH(
+                df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0
+            )
+            df['LTB'] = talib.LINEARREG_SLOPE(df['close'], timeperiod=20)
+            df['Pullback'] = talib.ROC(df['close'], timeperiod=1)
             
             return True
         except Exception as e:
             print(f"Erro ao calcular indicadores: {e}")
             return False
 
-    def detectar_padroes(self):
-        """Detecta padrões de candlestick."""
-        try:
-            padroes = ta.cdl_pattern(
-                self.dados['open'], self.dados['high'], 
-                self.dados['low'], self.dados['close'],
-                name=["hammer", "shootingstar", "engulfing", "doji", "marubozu"]
-            )
-            
-            # Mapear padrões detectados
-            for idx, row in padroes.iloc[-5:].iterrows():  # Últimas 5 velas
-                for padrao, valor in row.items():
-                    if valor != 0:
-                        acao = "Comprar" if valor > 0 else "Vender"
-                        self.padroes_detectados.append({
-                            "timestamp": self.dados.iloc[idx]['timestamp'],
-                            "padrao": padrao.split('_')[-1].capitalize(),
-                            "acao": acao
-                        })
-            return True
-        except Exception as e:
-            print(f"Erro ao detectar padrões: {e}")
-            return False
-
     def gerar_sinal(self):
-        """Gera sinal de compra/venda com base nos indicadores e padrões."""
+        """
+        Gera sinal de compra/venda com base nos indicadores calculados.
+        
+        :return: Tupla com as porcentagens de sinal de compra e venda.
+        """
         sinal_compra = 0
         sinal_venda = 0
         
@@ -87,20 +69,17 @@ class Indicators:
             sinal_compra += self.pesos_indicadores["EMA"] * 100
         if self.dados['RSI'].iloc[-1] < 30:
             sinal_compra += self.pesos_indicadores["RSI"] * 100
+        if self.dados['MACD'].iloc[-1] > self.dados['MACD_signal'].iloc[-1]:
+            sinal_compra += self.pesos_indicadores["MACD"] * 100
             
         # Lógica para Venda
-        if self.dados['Estocastico'].iloc[-1] > 80:
+        if self.dados['Estocastico_K'].iloc[-1] > 80:
             sinal_venda += self.pesos_indicadores["Estocastico"] * 100
+        if self.dados['LTB'].iloc[-1] < 0:
+            sinal_venda += self.pesos_indicadores["LTB"] * 100
             
         # Limitar a 100%
         sinal_compra = min(100, round(sinal_compra, 2))
         sinal_venda = min(100, round(sinal_venda, 2))
         
         return sinal_compra, sinal_venda
-
-    def obter_padroes_recentes(self):
-        """Retorna os últimos padrões detectados formatados."""
-        return [
-            f"- {p['padrao']} ({p['timestamp']}) - {p['acao']} {self.pesos_padroes.get(p['padrao'], 0)*100}%"
-            for p in self.padroes_detectados[-2:]  # Últimos 2 padrões
-        ]
