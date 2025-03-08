@@ -1,7 +1,7 @@
-streamlit
-pandas
-numpy
-ta-lib
-requests
-pytz
-setuptools
+streamlit==1.26.0
+pandas==2.0.3
+numpy==1.23.5
+pandas_ta==0.3.14b0
+requests==2.31.0
+pytz==2023.3
+setuptools==68.0.0
