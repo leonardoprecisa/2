@@ -1,5 +1,5 @@
 import pandas as pd
-import talib
+import pandas_ta as ta
 
 class Indicators:
     def __init__(self, dados):
@@ -13,16 +13,14 @@ class Indicators:
         try:
             df = self.dados
             # Indicadores de Compra
-            df['EMA9'] = talib.EMA(df['close'], timeperiod=9)
-            df['EMA21'] = talib.EMA(df['close'], timeperiod=21)
-            df['RSI'] = talib.RSI(df['close'], timeperiod=14)
-            df['MACD'], df['MACD_signal'], df['MACD_hist'] = talib.MACD(
-                df['close'], fastperiod=12, slowperiod=26, signalperiod=9
-            )
-            df['Bollinger_Upper'], df['Bollinger_Middle'], df['Bollinger_Lower'] = talib.BBANDS(
-                df['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0
-            )
-            df['ATR'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+            df['EMA9'] = ta.ema(df['close'], length=9)
+            df['EMA21'] = ta.ema(df['close'], length=21)
+            df['RSI'] = ta.rsi(df['close'], length=14)
+            df['MACD'] = ta.macd(df['close'], fast=12, slow=26, signal=9)['MACD_12_26_9']
+            bbands = ta.bbands(df['close'], length=20)
+            df['Bollinger_Upper'] = bbands['BBU_20_2.0']
+            df['Bollinger_Lower'] = bbands['BBL_20_2.0']
+            df['ATR'] = ta.atr(df['high'], df['low'], df['close'], length=14)
             return True
         except Exception as e:
             print(f"Erro ao calcular indicadores: {e}")
